@@ -20,6 +20,9 @@ Decisiones de diseño en las que el asistente de IA (Claude Opus 5.5) **me consu
 | C6 | 7 | ¿Se permiten números derivados (diferencias, %) que el código no envió? | Solo literales · Sí, con tolerancia | **Solo literales** | Validación simple y fiable. Para que el modelo pueda dar comparaciones útiles, el código las precalcula (exceso sobre el umbral, % frente al promedio del equipo, rankings) y se las envía. |
 | C7 | 7 | Formato del prompt versionado | Archivo `.md` por versión · Módulo JS por versión | **Archivo `.md` por versión** | `prompts/session-report.v1.md` con secciones y `{{placeholders}}`: lo más legible y fácil de revisar en un PR. La versión usada se devuelve en `meta.promptVersion`. |
 | C8 | 8 | Modelo de Gemini por defecto | gemini-3.1-flash-lite · gemini-3.8-flash · gemini-flash-latest | **gemini-3.1-flash-lite** | `gemini-2.5-flash` ya no está disponible para cuentas nuevas (404). `gemini-3.8-flash` (el recomendado por Google) no respondía en 120 s por alta demanda, y `gemini-flash-latest` devolvía 503. `gemini-3.1-flash-lite` respondió en ~1,6–3 s y sus reportes reales pasaron la validación al primer intento. Se puede cambiar con `GEMINI_MODEL` sin tocar código. |
+| C9 | 19 | Cómo aplicar la paleta de oliversports.ai (el sitio es mayormente oscuro) | Tema oscuro como el sitio · Claro con header de marca | **Tema oscuro como el sitio** | Fondo navy `#001c26 → #003c51`, texto blanco y azul `#2378f8` / rosa `#e04080` como acentos: la app se ve coherente con la marca. |
+| C10 | 19 | Colores de los niveles de alerta (la paleta de OLIVER no tiene rojo) | Amarillo + rosa de marca · Amarillo de marca + rojo estándar | **Amarillo de marca + rojo estándar** | Warning = amarillo CTA del sitio `#f9b82c`; Critical = rojo convencional `#ef4444`, por su significado universal de "peligro". El rosa queda como acento decorativo. |
+| C11 | 21 | Cómo mostrar la tabla de 11 métricas en celular (~390 px) | Tarjetas por jugador · Tabla con scroll horizontal | **Tarjetas por jugador** | En móvil y tablet cada jugador es una tarjeta con todas sus métricas en grilla y los umbrales resaltados; el orden se elige con un Select + botón asc/desc (sigue resolviéndose en el servidor). La tabla se mantiene en escritorio. Con scroll horizontal solo se verían ~2 métricas a la vez. |
 
 ### Indicadas directamente por mí (sin consulta previa)
 
@@ -36,6 +39,13 @@ Decisiones de diseño en las que el asistente de IA (Claude Opus 5.5) **me consu
 | D9 | 7 | El JSON de datos (`session_data.json`) **no se modifica** nunca. |
 | D10 | 7 | Registrar las decisiones consultadas en una sección propia del log (esta sección). |
 | D11 | 8 | El asistente **nunca lee el `.env`** (ni valores ni estructura): solo ejecuta los scripts de la app, que lo cargan por su cuenta, e informa el resultado. |
+| D12 | 16–18 | Pausa temporal del registro en el log (Prompts 16–18), reactivada en el Prompt 19 con la indicación de registrar también lo pausado. |
+| D13 | 19 | Gráfico y reporte **uno debajo del otro** con CSS flex. |
+| D14 | 19 | Usar la **paleta de colores de oliversports.ai** en todo el frontend. |
+| D15 | 21 | Ampliar el ancho del Select de sesión (se cortaba) y hacer la app **responsive**. |
+| D16 | 21 | El README debe incluir: instalación y ejecución (backend, frontend, seed), modelo de IA y por qué, decisiones de diseño y trade-offs, mejoras con más tiempo y uso de herramientas de IA. |
+| D17 | 21 | Separar los cambios en **varios commits**. |
+| D18 | 21 | Añadir una **leyenda en un dialog** con todos los conceptos, según la referencia de campos del enunciado. |
 
 ---
 
@@ -567,3 +577,210 @@ Confirmado: el rol `admin` **no existía** en el servidor. Esa era la causa del 
 | --- | --- | --- |
 | 1 | Aclarar que "sesión" es la **entidad del dominio** (un entrenamiento o un partido, tabla `sessions`), no una sesión de usuario o de login | El término es ambiguo en desarrollo web; en este proyecto no hay autenticación. |
 | 2 | Proponer un nombre de commit más explícito: `feat: endpoints de sesiones de entrenamiento/partido, frontend de revisión y reporte de IA validado` | Evita la confusión con "sesión de usuario" para quien lea el historial. |
+
+---
+
+## Prompt 16 — Conectar el repositorio con GitHub
+
+**Fecha:** 2026-11-10 · *Registrado a posteriori: durante este prompt el log estaba en pausa (D12).*
+
+**Instrucción:**
+> ¿Cómo hago para conectar mi repo con mi cuenta de GitHub?
+
+### Estado encontrado
+Sin remoto configurado, rama local `master`, GitHub CLI (`gh`) no instalada.
+
+### Decisiones
+
+| # | Decisión | Justificación |
+| --- | --- | --- |
+| 1 | Dos caminos: **(A)** crear el repo en github.com y `git remote add origin` + `git push -u origin main`; **(B)** `winget install GitHub.cli` + `gh auth login` + `gh repo create --source=. --push` | A no requiere instalar nada; B lo hace todo en un comando. |
+| 2 | Crear el repo **sin** README / .gitignore / licencia en GitHub | Evita un commit remoto que choque con el historial local. |
+| 3 | Sugerir renombrar `master` → `main` (`git branch -M main`) | Es el nombre por defecto en GitHub. |
+| 4 | Recordar que `.env` está en `.gitignore` y que hay que commitear los cambios pendientes antes del push | Las credenciales no se suben, y se sube el trabajo completo. |
+
+---
+
+## Prompt 17 — Descripción del proyecto
+
+**Fecha:** 2026-11-10 · *Registrado a posteriori (D12).*
+
+**Instrucción:**
+> Genera una descripción del proyecto.
+
+### Decisiones
+
+| # | Decisión | Justificación |
+| --- | --- | --- |
+| 1 | Entregar una versión **corta** para el campo "About" de GitHub (en español e inglés) más *topics*, y una versión **completa** en bullets | Encaja con el contexto (conectar con GitHub) y sirve para el README o la presentación. |
+| 2 | Destacar en la descripción la **validación anti-alucinación** del reporte | Es el punto que el enunciado dice que más se va a evaluar. |
+| 3 | No escribirla en ningún archivo sin pedirlo | El usuario la usará donde decida. |
+
+---
+
+## Prompt 18 — Cómo correr el proyecto en local
+
+**Fecha:** 2026-11-10 · *Registrado a posteriori (D12).*
+
+**Instrucción:**
+> No agregues más nada a log.md hasta que te diga lo contrario. ¿Cómo hago para correr el proyecto en local?
+
+### Decisiones
+
+| # | Decisión | Justificación |
+| --- | --- | --- |
+| 1 | Pasos mínimos: revisar `.env` (en especial `GEMINI_MODEL=gemini-3.1-flash-lite`) → `npm install` → `npm run db:setup` (solo la 1.ª vez) → `npm run dev` → `http://localhost:5173` | Es el flujo real verificado en los Prompts 8–13. |
+| 2 | Incluir una tabla de problemas frecuentes (API caída, BD no disponible, 404 del modelo, timeout puntual) y `AI_PROVIDER=mock` para probar sin gastar cuota | Son los errores que ya aparecieron durante el desarrollo. |
+
+---
+
+## Prompt 19 — Layout apilado, paleta de OLIVER y propuesta de librería de componentes
+
+**Fecha:** 2026-11-10
+
+**Instrucción:**
+> Ahora todo lo que mencioné lo puedes agregar al log.md. Haz que el componente "Metric by player" y el "AI session report" estén uno debajo de otro con CSS flex. Para el proyecto utiliza la paleta de colores de https://oliversports.ai/es/ en todo el frontend y sus componentes. Haz una propuesta de librerías de componentes para sustituir los componentes visuales actuales, a modo de que la app quede más moderna.
+
+### Obtención de la paleta
+La herramienta de lectura web convierte la página a markdown y pierde el CSS, así que se descargaron el HTML y sus hojas de estilo (`/css/main.css`, `/css/pages/oliver-sports.css`) y se leyeron las variables reales:
+
+| Variable / uso en el sitio | Valor | Rol en la app |
+| --- | --- | --- |
+| `--dark-blue`, fondos de hero y footer | `#001c26` → degradado `#003c51` | Fondo de página y header |
+| `--blue` | `#2378f8` | Color principal (barras, selección, foco) |
+| Botón primario (degradado) | `#184b96` → `#2378f8` | Botón "Generate report" |
+| `--pink` | `#e04080` | Acento (badge "Match", estrellas de destacados) |
+| Botón CTA amarillo | `#f9b82c` / `#ffc94d` | Nivel **warning** |
+| Texto sobre fondo oscuro (FAQ) | `#d9e5fa` | Texto secundario |
+| Tipografía | Rubik | Fuente de toda la app |
+| `--border-radius` | `30px` | Botones, selects y controles en forma de píldora |
+
+### Decisiones
+
+| # | Decisión | Justificación | Alternativas descartadas |
+| --- | --- | --- | --- |
+| 1 | Gráfico y reporte en un contenedor **`flex flex-col gap-6`** (antes `grid lg:grid-cols-2`) | Pedido explícito (D13). Además le da al gráfico todo el ancho y al reporte espacio para leerse sin columnas estrechas. | — |
+| 2 | Paleta como **tokens semánticos** en el `@theme` de Tailwind v4 (`ink`, `surface`, `line`, `fg`, `soft`, `muted`, `brand`, `accent`, `warning`, `critical`, `success`) | Los componentes usan nombres de rol, no hex sueltos: cambiar la paleta es tocar un solo archivo (`index.css`). Se verificó con `grep` que **no queda ningún color de Tailwind por defecto** (slate, indigo…) en el frontend. | Reemplazar hex a mano en cada componente. |
+| 3 | **Tema oscuro** (consulta C9) con fondo degradado navy, tarjetas translúcidas con `backdrop-blur` y header fijo | Coherente con el sitio de la marca. | Tema claro. |
+| 4 | Warning = amarillo de marca, Critical = **rojo estándar** (consulta C10), con variantes `*-fg` más claras para el texto sobre fondo oscuro | Mantiene el significado universal de "peligro" y asegura el contraste en tema oscuro. Se conservan ▲ / ▲▲ para no depender solo del color. | Rosa como critical. |
+| 5 | Controles en **píldora** (radio 30px) y botón primario con el **degradado azul** de los botones del sitio (`PrimaryButton`) | Mismo lenguaje visual que la marca. | — |
+| 6 | Recharts recibe los mismos valores de los tokens (objeto `COLORS` documentado) para barras, ejes, grilla y tooltip | Recharts dibuja SVG y necesita colores concretos; se centralizan en un solo objeto. | — |
+| 7 | `color-scheme: dark` en `:root` | Selects nativos, scrollbars y controles del navegador también en oscuro. | — |
+| 8 | Se mantiene el nombre del proyecto "Oliver" en el header, **sin imitar el logotipo** de la marca | Se usa la paleta, no la identidad gráfica de la empresa. | Reproducir el logo "OLIVER." |
+| 9 | La librería de componentes se entrega como **propuesta**, sin implementar | Se pidió una propuesta; adoptar una librería es una decisión del usuario (regla de consulta). | Migrar directamente. |
+
+### Propuesta de librerías de componentes
+
+**Criterios:** compatible con **React 19 + Tailwind v4** (ya en el proyecto), admite el **tema de marca** mediante tokens, es **accesible** (teclado, ARIA), es moderna visualmente y no duplica la librería de gráficos.
+
+| Opción | Qué es | A favor | En contra |
+| --- | --- | --- | --- |
+| **1. shadcn/ui** ⭐ *recomendada* | Componentes sobre **Radix UI** + Tailwind que se **copian al repo** (no es una dependencia cerrada) | Usa Tailwind v4 y variables CSS, así que mapea directo a nuestros tokens; su `Chart` está **construido sobre Recharts** (se conserva); `DataTable` con **TanStack Table** admite orden **manual en servidor**; es la referencia actual en apps React modernas. | Más archivos en el repo (los componentes quedan en `components/ui/`). |
+| 2. Tremor | Librería orientada a **dashboards** (Tailwind + Recharts) | KPI cards, charts y tablas de analítica listos; estética "dashboard" moderna. | Catálogo más acotado (menos primitivas como Select o Toggle avanzados); el tema oscuro y la marca requieren más ajuste. |
+| 3. HeroUI (ex NextUI) | Librería completa sobre Tailwind con animaciones | Muy vistosa y con buen tema oscuro de serie; `Table` con orden incluido. | Añade un provider y un plugin de tema propios; personalizar la marca a fondo es más trabajoso. |
+| 4. Mantine (+ Mantine Charts) | Librería completa con su propio sistema de estilos | Enorme catálogo, excelente tema oscuro, charts sobre Recharts. | **No usa Tailwind**: convivirían dos sistemas de estilos o habría que reescribir todo. |
+| 5. MUI | Material Design | Muy madura. | Estética Material poco "moderna" para esta marca, pesada, y su sistema de estilos choca con Tailwind. |
+
+**Mapeo con shadcn/ui (recomendada):**
+
+| Componente actual | Sustituto | Mejora |
+| --- | --- | --- |
+| `<select>` nativo (sesión, métrica) | `Select` (Radix) | Menú desplegable estilizado en oscuro, con búsqueda por teclado. |
+| `MetricsTable` | `DataTable` (TanStack Table, `manualSorting`) | Encabezados ordenables accesibles, columnas fijas, se mantiene el orden en el servidor. |
+| `title=` en celdas con umbral | `Tooltip` (Radix) | Tooltips reales, con estilo y accesibles (los `title` nativos no se ven en táctil). |
+| `Segmented` | `ToggleGroup` | Mismo control, con foco y teclado de Radix. |
+| `Card`, `LevelBadge`, `Spinner`/skeleton | `Card`, `Badge` (variantes warning/critical), `Skeleton` | Consistencia visual. |
+| `ErrorState` | `Alert` + `Sonner` (toasts) | Errores del reporte como toast no intrusivo. |
+| `MetricChart` | `ChartContainer` + `ChartTooltip` (Recharts) | Colores por variables CSS (sin el objeto `COLORS` duplicado) y tooltip consistente. |
+| Glifos ▲ / ★ / ✦ | Iconos `lucide-react` | Iconografía coherente. |
+
+### Verificación
+- `npm run build`: correcto. `grep` sin colores fuera de la paleta.
+- Prueba visual (API de demo + Edge headless): tema oscuro, tabla con resaltado amarillo y rojo, gráfico a ancho completo, reporte debajo con controles en píldora; orden por columna funcionando. Sin errores en la consola.
+
+### Pendiente
+- Que el usuario elija la librería de componentes (o ninguna) para implementar la migración. ✅ Elegida shadcn/ui (Prompt 20).
+
+---
+
+## Prompt 20 — Migración del frontend a shadcn/ui
+
+**Fecha:** 2026-11-10
+
+**Instrucción:**
+> Utiliza shadcn/ui para los componentes: instala la librería y sustituye los componentes actuales por componentes de shadcn/ui.
+
+### Componentes sustituidos
+
+| Antes (propio) | Ahora (shadcn/ui) |
+| --- | --- |
+| `<select>` nativo (sesión y métrica) | `Select` (Radix) con `Label`; el de sesión muestra fecha, título y un `Badge` con el tipo |
+| Tabla HTML con encabezados-botón | **Data table**: `Table` + **TanStack Table v8** con `manualSorting` (el orden sigue resolviéndose en el servidor) y encabezados `Button` ghost con iconos de orden |
+| Atributos `title=` en celdas y encabezados | `Tooltip` (Radix, accesible con teclado y visible en táctil) |
+| `Card` propio | `Card` / `CardHeader` / `CardTitle` / `CardDescription` / `CardAction` / `CardContent` |
+| `Segmented` propio | `ToggleGroup` (`type="single"`) |
+| Botón con clases a mano | `Button` con el degradado azul de marca y forma de píldora |
+| `LevelBadge` / etiquetas | `Badge` con variantes nuevas `warning`, `critical`, `brand` y `pink` |
+| Spinner y skeleton propios | `Skeleton` + `Loader2` de lucide |
+| Caja de error / avisos | `Alert` (destructive / informativo / éxito) |
+| Gráfico Recharts "suelto" | `ChartContainer` + `ChartTooltip` de shadcn (sigue usando Recharts) |
+| Glifos ▲ ▲▲ ★ ✦ | Iconos `lucide-react` (`TriangleAlert`, `OctagonAlert`, `Star`, `Sparkles`…) |
+| — | `Sonner`: toasts de "Report generated" y de error |
+
+### Decisiones
+
+| # | Decisión | Justificación | Alternativas descartadas |
+| --- | --- | --- | --- |
+| 1 | Configuración manual (`components.json` con `tsx: false`, alias `@/` en Vite y en `jsconfig.json`) y luego `npx shadcn add …` | El proyecto es JavaScript; el CLI genera los componentes en `.jsx`. | Migrar a TypeScript solo para usar shadcn. |
+| 2 | **Sustituir el paquete npm `cn`** que el CLI añadió por el estándar de shadcn: `src/lib/utils.js` con `clsx` + `tailwind-merge` | El CLI, al no haberse ejecutado `init`, resolvió `cn` a un paquete npm poco conocido. Por **seguridad de la cadena de suministro** y por convención se usan las dependencias estándar que cualquier desarrollador de shadcn espera. | Mantener el paquete `cn`. |
+| 3 | Quitar `next-themes` y fijar `theme="dark"` en `Sonner` | La app es solo tema oscuro (C9); esa dependencia sobraba. | — |
+| 4 | Fijar **`@tanstack/react-table` en v8** | npm instaló la v9, cuya API cambia respecto a la que documenta el `DataTable` de shadcn. | v9. |
+| 5 | **Tema de marca en las variables estándar de shadcn** (`--background`, `--card`, `--primary`, `--muted-foreground`, `--border`, `--ring`, `--chart-1..5`…) + tokens propios (`soft`, `pink`, `warning`, `critical`, `success`, `brand-deep`) | Los componentes de shadcn heredan la paleta de OLIVER sin tocar su código. Los tokens propios antiguos `accent` y `muted` se **renombraron** porque chocaban con el significado que tienen en shadcn (fondo de hover y fondo atenuado). | Editar las clases de cada componente de shadcn. |
+| 6 | Personalizar los componentes generados donde hace falta (variantes de `Badge`, `Sonner`) | Es el modelo de shadcn: el código vive en el repo para adaptarlo. | — |
+| 7 | Niveles de alerta con **icono de forma distinta** (triángulo = warning, octógono = critical) además del color | Accesibilidad: no depender solo del color (sustituye a ▲ / ▲▲). | — |
+| 8 | Unidades **debajo** del nombre en los encabezados de la tabla | Con los botones de shadcn las 11 columnas no entraban en escritorio (Workload quedaba cortada). | Ocultar columnas. |
+| 9 | En móvil, los controles del reporte (`CardAction`) bajan **debajo del título**; desde `md` quedan a la derecha | En 390 px el título quedaba aplastado en una columna estrecha. | — |
+| 10 | El `Select` de sesión siempre controlado (`""` hasta que llega la sesión por defecto) | Se detectó en la prueba un warning de React (uncontrolled → controlled). | — |
+| 11 | Toasts **además** del estado inline del reporte | El toast confirma la acción aunque el panel esté fuera de pantalla; el estado inline (carga, error, vacío) se mantiene porque lo pide el enunciado. | Solo toasts. |
+
+### Verificación
+- `npm run build`: correcto. `npm test`: 40/40.
+- Prueba en navegador (API de demo + Edge headless por DevTools Protocol): ordenar por Workload (servidor, `aria-sort="descending"`); cambiar de sesión con el `Select` de Radix **usando el teclado**; generar el reporte → toast "Report generated" y contenido; capturas en escritorio (1440 px, las 11 columnas visibles) y en móvil (390 px). **Sin errores ni warnings en la consola** tras corregir el `Select`.
+
+### Pendiente
+- Probar con `npm run dev` y Gemini real una vez actualizado `GEMINI_MODEL` en el `.env`.
+
+---
+
+## Prompt 21 — Select de sesión, diseño responsive, README del enunciado, leyenda y commits
+
+**Fecha:** 2026-11-10
+
+**Instrucciones (en un mismo turno):**
+> 1. El Select de sesión queda cortado y no se visualiza correctamente: ampliar su ancho. Después, hacer que la app se vea responsive.
+> 2. Asegurar que el README incluya: cómo instalar y correr el proyecto (backend, frontend y seed), qué modelo de IA se usó y por qué, las decisiones de diseño principales y sus trade-offs, qué se mejoraría con más tiempo, y si se usaron herramientas de IA para programar y cómo.
+> 3. Separar los cambios implementados en varias partes para subirlos en varios commits.
+> 4. Agregar una leyenda con todos los conceptos, en un dialog, según la tabla "Referencia de campos" del enunciado.
+
+### Decisiones consultadas
+C11 (ver la sección "Decisiones consultadas y tomadas por mí").
+
+### Decisiones
+
+| # | Decisión | Justificación | Alternativas descartadas |
+| --- | --- | --- | --- |
+| 1 | **Select de sesión:** la causa era una clase propia `sm:w-96` (384 px fijos). En escritorio el trigger ahora **se ajusta al contenido** (`w-auto`, mínimo 24 rem); en móvil y tablet ocupa el ancho completo y el texto puede **pasar a otra línea** en vez de cortarse. | Verificado: contenido de 389 px dentro de un trigger de 437 px, sin recorte. | Truncar con "…" (se pierde el título). |
+| 2 | `data-[size=default]:h-auto` en el trigger | El `SelectTrigger` de shadcn fija `h-9` con un selector de datos que ganaba a `h-auto`; el texto en dos líneas se superponía con la etiqueta (detectado en la captura de móvil). | — |
+| 3 | **Breakpoints:** tabla desde `lg` (1024 px); por debajo, tarjetas (1 columna en móvil, 2 en tablet). Header en fila desde `lg`. | A 820 px (tablet) la tabla de 11 columnas todavía necesitaba scroll. | Tabla desde `md`. |
+| 4 | Header **fijo solo desde `md`** | En móvil un header fijo con el selector ocupa una parte grande de la pantalla. | Siempre fijo. |
+| 5 | Gráfico en modo compacto (< 640 px): eje Y de 84 px, nombres abreviados ("S. Molina"), 3 marcas en el eje X; con un hook `useMediaQuery` (`useSyncExternalStore`) | Recharts necesita valores numéricos, no clases CSS; con 124 px de eje las barras quedaban muy cortas en 390 px. | Ocultar el gráfico en móvil. |
+| 6 | Paddings y espaciados reducidos en móvil; botón "Generate report" a ancho completo en móvil | Más espacio útil y un objetivo táctil más grande. | — |
+| 7 | La descripción de la tarjeta de métricas pasa a "Sortable by any metric (sorted on the server)…" | "Click a column header" no aplica en la vista de tarjetas. | — |
+| 8 | **README reorganizado** con las cinco secciones pedidas al principio (instalación; modelo de IA y por qué; decisiones y trade-offs; mejoras con más tiempo; uso de herramientas de IA) y la referencia técnica al final | Que quien evalúe encuentre primero lo que pide el enunciado. La sección de uso de IA es transparente: Claude Code + Claude Opus 5.5, cómo se dirigió, qué se decidió y cómo se verificó. | Añadir secciones al final del README existente. |
+| 9 | **Leyenda** como `Dialog` de shadcn, abierta desde un botón "Legend" en la tarjeta de métricas. Muestra: las 8 métricas con su descripción (de la referencia de campos del enunciado, centralizada en `metrics.js`), la tabla de **umbrales reales de la sesión** y los indicadores (Warning, Critical, sin dato, pocos minutos, "Data-based", tipo de sesión). | Una sola fuente para etiquetas y descripciones; los umbrales se leen de la API, no se repiten a mano. | Leyenda fija bajo la tabla (ya existe una versión corta); umbrales hardcodeados. |
+| 10 | El CLI de shadcn volvió a añadir el paquete npm `cn` al instalar `dialog`: se reemplazó otra vez por `@/lib/utils` y se desinstaló | Mismo criterio que el Prompt 20 (cadena de suministro y convención). Es un comportamiento recurrente del CLI con esta configuración: **revisar los imports cada vez que se añade un componente**. | — |
+| 11 | **Commits separados** de lo pendiente, cada uno funcional por sí solo: `feat(client): componentes shadcn/ui, paleta de marca y diseño responsive` → `feat(client): leyenda … en un dialog` → `docs: README … y registro de decisiones`. El commit 1 se verificó aislado (`git stash` del resto + build + tests). | El backend y la capa de IA ya estaban en `810aedd`, **publicado en `origin/main`** por el usuario: separarlo exigiría reescribir el historial público (force push), así que no se tocó. `App.jsx` mezclaba cambios de los commits 1 y 2: se preparó temporalmente una versión sin la leyenda para que el commit 1 no importara un archivo inexistente. | Reescribir `810aedd` con force push; un solo commit. |
+
+### Verificación
+- `npm run build` y `npm test` (40/40) correctos.
+- Navegador headless a **1440 px, 820 px y 390 px**: sin scroll horizontal en la página; 12 tarjetas en móvil; orden por Workload desde el Select móvil en ambos sentidos (Molina primero en desc, Medina en asc, Suárez con `null` al final); Select de sesión sin recorte; la leyenda abre con 14 conceptos y 4 filas de umbrales y se cierra con Escape. **Sin errores ni warnings en la consola.**
