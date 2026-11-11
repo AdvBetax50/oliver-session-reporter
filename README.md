@@ -93,6 +93,7 @@ ALTER SCHEMA public OWNER TO admin;   -- PostgreSQL 15+
 | **Orden de la tabla en el servidor** (`order_by` con lista blanca → columnas SQL, `NULLS LAST`). | Usa el endpoint pedido y evita la inyección SQL. | Una petición por cada cambio de orden (son 12 filas, así que es despreciable). |
 | **Inyección de dependencias** (`createApp(deps)`) y tests HTTP con repositorios en memoria y una IA simulada. | Tests rápidos sin base de datos ni red; el SQL real se cubre aparte con tests de integración contra PostgreSQL. | Los repositorios en memoria duplican la lógica de filtro y orden del SQL (el SQL se testea aparte). |
 | **Frontend:** React + **shadcn/ui** (Radix + Tailwind v4) con la paleta de oliversports.ai; data table (TanStack) en escritorio y **tarjetas por jugador en móvil y tablet**; estados de carga, error y vacío explícitos. | Componentes accesibles (teclado, ARIA, tooltips reales) y consistentes con la marca; usable en un celular a pie de campo. | Más componentes en el repo (shadcn copia su código) y dos vistas para las métricas. |
+| **Caché del reporte en `localStorage`**, con clave sesión + idioma + audiencia. Solo se guarda un reporte que **pasó la validación**, y el primero **nunca se sobreescribe** (el botón pasa a "Report saved"). | Evita llamadas repetidas a la IA (coste, cuota, latencia) y da un reporte estable para cada combinación; no requiere cambios en el servidor. | Es por navegador: dos usuarios pueden tener reportes distintos para la misma combinación, y se pierde si se borran los datos del sitio. Un reporte con partes de respaldo no se guarda, así que se puede volver a intentar. |
 | **npm workspaces** (sin Turborepo / Nx), JavaScript con ES Modules (sin TypeScript). | Lo mínimo necesario para dos apps; arranque inmediato. | Sin tipado estático; los contratos se validan en tiempo de ejecución con DTOs. |
 
 El detalle de cada decisión (con las alternativas descartadas) está en [`log.md`](./log.md).
@@ -101,6 +102,7 @@ El detalle de cada decisión (con las alternativas descartadas) está en [`log.m
 
 ## 4. Qué mejoraría o haría distinto con más tiempo
 
+- **Caché compartido en el servidor** (tabla en PostgreSQL o KV): hoy el caché es por navegador; en el servidor, todos los usuarios verían el mismo reporte para cada combinación.
 - **Streaming** de la respuesta del modelo para mostrar el reporte a medida que se genera y reducir la espera percibida.
 - **Evals del prompt:** un conjunto de casos (sesiones con datos raros) que mida automáticamente la tasa de validación al primer intento, para comparar `v1` contra `v2` y entre modelos.
 - **Validación semántica más fina:** hoy se verifica que cada número exista en los datos, pero no que esté **atribuido al jugador correcto**; el chequeo de nombres es heurístico.

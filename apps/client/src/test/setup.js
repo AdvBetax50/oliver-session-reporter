@@ -7,6 +7,7 @@ import { afterEach, vi } from 'vitest';
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  window.localStorage.clear(); // el caché de reportes no debe pasar de un test a otro
 });
 
 // useMediaQuery / Recharts: por defecto, pantalla de escritorio

@@ -124,3 +124,120 @@ describe('ReportPanel', () => {
     expect(toast.success).not.toHaveBeenCalled();
   });
 });
+
+describe('ReportPanel — caché en localStorage', () => {
+  // Reporte que pasó la validación (cacheable)
+  const validated = (language = 'en', audience = 'coach', summary = `Saved ${language}/${audience}`) => {
+    const data = reportResponse({ language, audience });
+    data.report = { ...data.report, summary };
+    data.meta = { ...data.meta, validation: { passed: true, issues: [], fallbackFields: [] } };
+    return data;
+  };
+  const key = (language, audience) => `oliver:report:v1:103:${language}:${audience}`;
+  const savedButton = () => screen.getByRole('button', { name: /report saved/i });
+
+  test('un reporte validado se guarda; luego el botón queda en "Report saved" y no vuelve a llamar a la IA', async () => {
+    const fetch = vi.fn(async () => jsonResponse(validated()));
+    vi.stubGlobal('fetch', fetch);
+    const { user } = setup();
+
+    await user.click(generateButton());
+    expect(await screen.findByText('Saved en/coach')).toBeInTheDocument();
+    expect(JSON.parse(window.localStorage.getItem(key('en', 'coach'))).report.summary).toBe('Saved en/coach');
+    expect(toast.success).toHaveBeenCalledWith('Report generated', expect.objectContaining({ description: expect.stringMatching(/Saved in this browser/) }));
+
+    expect(savedButton()).toBeDisabled();
+    await user.click(savedButton());
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  test('al volver a abrir la sesión, el reporte guardado se muestra al instante sin llamar a la API', async () => {
+    window.localStorage.setItem(key('en', 'coach'), JSON.stringify(validated()));
+    const fetch = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    setup();
+
+    expect(screen.getByText('Saved en/coach')).toBeInTheDocument();
+    expect(screen.getByText(/Saved report, generated on/)).toBeInTheDocument();
+    expect(screen.queryByText('No report generated yet')).not.toBeInTheDocument();
+    expect(savedButton()).toBeDisabled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  test('cada idioma y audiencia se genera una vez y se guarda por separado; cambiar entre ellas usa el caché', async () => {
+    const fetch = vi.fn(async (url, init) => {
+      const { language, audience } = JSON.parse(init.body);
+      return jsonResponse(validated(language, audience));
+    });
+    vi.stubGlobal('fetch', fetch);
+    const { user } = setup();
+
+    await user.click(generateButton()); // en/coach
+    await screen.findByText('Saved en/coach');
+
+    await user.click(screen.getByRole('radio', { name: 'Español' })); // es/coach: aún no existe
+    expect(screen.getByText(/Language or audience changed/)).toBeInTheDocument();
+    await user.click(generateButton());
+    await screen.findByText('Saved es/coach');
+
+    await user.click(screen.getByRole('radio', { name: 'Players' })); // es/player
+    await user.click(generateButton());
+    await screen.findByText('Saved es/player');
+    expect(fetch).toHaveBeenCalledTimes(3);
+
+    // Volver a combinaciones ya generadas: se muestran desde el caché, sin nuevas llamadas
+    await user.click(screen.getByRole('radio', { name: 'English' }));
+    await user.click(screen.getByRole('radio', { name: 'Coach' }));
+    expect(screen.getByText('Saved en/coach')).toBeInTheDocument();
+    await user.click(screen.getByRole('radio', { name: 'Español' }));
+    expect(screen.getByText('Saved es/coach')).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledTimes(3);
+    expect([key('en', 'coach'), key('es', 'coach'), key('es', 'player')].every((k) => window.localStorage.getItem(k))).toBe(true);
+  });
+
+  test('el reporte guardado no se sobreescribe aunque exista uno distinto en el servidor', async () => {
+    window.localStorage.setItem(key('en', 'coach'), JSON.stringify(validated('en', 'coach', 'Original')));
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(validated('en', 'coach', 'Nuevo'))));
+    const { user } = setup();
+    await user.click(savedButton()); // deshabilitado: no hace nada
+    expect(screen.getByText('Original')).toBeInTheDocument();
+    expect(JSON.parse(window.localStorage.getItem(key('en', 'coach'))).report.summary).toBe('Original');
+  });
+
+  test('un reporte con partes de respaldo NO se guarda y se puede volver a pedir a la IA', async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(reportResponse())) // validation.passed = false
+      .mockResolvedValueOnce(jsonResponse(validated()));
+    vi.stubGlobal('fetch', fetch);
+    const { user } = setup();
+
+    await user.click(generateButton());
+    await screen.findByRole('article');
+    expect(window.localStorage.getItem(key('en', 'coach'))).toBeNull();
+    expect(toast.success).toHaveBeenLastCalledWith('Report generated', expect.objectContaining({ description: expect.stringMatching(/not saved/) }));
+    expect(generateButton()).toHaveTextContent('Regenerate report');
+
+    await user.click(generateButton());
+    await screen.findByText('Saved en/coach');
+    expect(window.localStorage.getItem(key('en', 'coach'))).not.toBeNull();
+    expect(savedButton()).toBeDisabled();
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  test('los errores no se guardan en el caché', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ error: 'quota' }, { status: 429 })));
+    const { user } = setup();
+    await user.click(generateButton());
+    await screen.findByRole('alert');
+    expect(window.localStorage.length).toBe(0);
+  });
+
+  test('si localStorage falla (modo privado / lleno), el reporte se muestra igual', async () => {
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new DOMException('quota', 'QuotaExceededError'); });
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(validated())));
+    const { user } = setup();
+    await user.click(generateButton());
+    expect(await screen.findByText('Saved en/coach')).toBeInTheDocument();
+    expect(generateButton()).toHaveTextContent('Regenerate report');
+  });
+});

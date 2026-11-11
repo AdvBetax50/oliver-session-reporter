@@ -23,6 +23,9 @@ Decisiones de diseño en las que el asistente de IA (Claude Opus 5.5) **me consu
 | C9 | 19 | Cómo aplicar la paleta de oliversports.ai (el sitio es mayormente oscuro) | Tema oscuro como el sitio · Claro con header de marca | **Tema oscuro como el sitio** | Fondo navy `#001c26 → #003c51`, texto blanco y azul `#2378f8` / rosa `#e04080` como acentos: la app se ve coherente con la marca. |
 | C10 | 19 | Colores de los niveles de alerta (la paleta de OLIVER no tiene rojo) | Amarillo + rosa de marca · Amarillo de marca + rojo estándar | **Amarillo de marca + rojo estándar** | Warning = amarillo CTA del sitio `#f9b82c`; Critical = rojo convencional `#ef4444`, por su significado universal de "peligro". El rosa queda como acento decorativo. |
 | C11 | 21 | Cómo mostrar la tabla de 11 métricas en celular (~390 px) | Tarjetas por jugador · Tabla con scroll horizontal | **Tarjetas por jugador** | En móvil y tablet cada jugador es una tarjeta con todas sus métricas en grilla y los umbrales resaltados; el orden se elige con un Select + botón asc/desc (sigue resolviéndose en el servidor). La tabla se mantiene en escritorio. Con scroll horizontal solo se verían ~2 métricas a la vez. |
+| C12 | 24 | Clave del caché de reportes | Sesión + idioma + audiencia · Sesión + idioma | **Sesión + idioma + audiencia** | Coach y Players tienen tono y contenido distintos: cada combinación se genera una vez y queda guardada. |
+| C13 | 24 | Dónde guardar el caché | Servidor + localStorage · Solo memoria del servidor · Solo localStorage | **Solo localStorage (navegador)** | La primera respuesta ("memoria del servidor, en localStorage") mezclaba dos lugares distintos, así que se repreguntó. Decisión final: sin cambios en el servidor; cada navegador guarda sus reportes. |
+| C14 | 24 | ¿Se cachea un reporte que no pasó la validación (con partes de respaldo)? | Solo si pasó la validación · Cachear siempre | **Solo si pasó la validación** | Un reporte con partes "Data-based" no queda congelado para siempre; los errores tampoco se guardan. |
 
 ### Indicadas directamente por mí (sin consulta previa)
 
@@ -46,6 +49,9 @@ Decisiones de diseño en las que el asistente de IA (Claude Opus 5.5) **me consu
 | D16 | 21 | El README debe incluir: instalación y ejecución (backend, frontend, seed), modelo de IA y por qué, decisiones de diseño y trade-offs, mejoras con más tiempo y uso de herramientas de IA. |
 | D17 | 21 | Separar los cambios en **varios commits**. |
 | D18 | 21 | Añadir una **leyenda en un dialog** con todos los conceptos, según la referencia de campos del enunciado. |
+| D19 | 22 | Agregar tests para todas las funcionalidades y confirmar que los existentes son adecuados. |
+| D20 | — | Separar los cambios en commits por categoría (ese prompt, a pedido del usuario, no se registra en el log). |
+| D21 | 24 | Caché del reporte: el primero que se genera para cada combinación se guarda y **no se sobreescribe**; añadir tests que lo confirmen. |
 
 ---
 
@@ -851,3 +857,93 @@ C11 (ver la sección "Decisiones consultadas y tomadas por mí").
 ### Verificación
 - `npm run test:all`: **126/126** en verde (64 unitarios backend + 52 frontend + 10 integración con PostgreSQL).
 - `npm run build`: correcto (los tests no entran en el bundle).
+
+---
+
+## Prompt 23 — Guía de despliegue con GitHub Actions y Cloudflare
+
+**Fecha:** 2026-11-10
+
+**Instrucción:**
+> Dame el paso a paso para desplegar con GitHub Actions el repo con Cloudflare.
+
+### Verificación previa
+Se consultó la documentación oficial de Cloudflare (actualizada a octubre de 2026): Node.js HTTP en Workers (`httpServerHandler` de `cloudflare:node`), Hyperdrive con `pg`, static assets (`run_worker_first`, `not_found_handling`), secretos y `process.env`, y `cloudflare/wrangler-action@v4`. Hallazgos relevantes:
+- **No hay guía oficial de Express**; sí de servidores `node:http`, sobre el que corre Express 5.
+- **Hyperdrive recomienda un cliente por request**, no un pool global.
+- **`nodejs_compat`** y **`process.env`** se activan por defecto con la `compatibility_date` actual.
+
+### Decisiones (propuestas, pendientes de implementar)
+
+| # | Decisión | Justificación | Alternativas |
+| --- | --- | --- | --- |
+| 1 | Un **único Worker** que sirve el frontend (static assets con modo SPA) y la API Express bajo `/api/*` (`run_worker_first`) | Mismo dominio: sin CORS, y el frontend sigue llamando a `/api/...` como en desarrollo. | Cloudflare Pages + Worker aparte. |
+| 2 | PostgreSQL en **Neon** + **Hyperdrive** | Cloudflare no puede alcanzar la base local; Neon es PostgreSQL gestionado con plan gratuito; Hyperdrive gestiona el pool de conexiones. | Supabase; D1 (implicaría reescribir el SQL). |
+| 3 | Workflow con job **test** (unitarios + integración con un servicio `postgres:18` + build) y job **deploy** solo en `main` tras pasar los tests | No se despliega nada que rompa tests; reaprovecha `npm run test:db` en CI. | Desplegar sin tests. |
+| 4 | `GEMINI_API_KEY` como **secret** de Wrangler; credenciales de Cloudflare como secretos de GitHub (token con "Edit Cloudflare Workers") | Ninguna clave en el repositorio. | — |
+| 5 | Plan B si Express no corriera en Workers: frontend en Cloudflare y API en un host Node (Render / Fly.io) | Express sobre Workers no tiene soporte documentado. | — |
+
+### Estado
+Guía entregada. La implementación (entrada `worker.js`, base de datos por request y `wrangler.jsonc`) queda a la espera de que el usuario cree la base en Neon y la configuración de Hyperdrive con su cuenta.
+
+---
+
+## Prompt 24 — Caché de los reportes de IA
+
+**Fecha:** 2026-11-10
+
+**Instrucción:**
+> Agregar caché cuando la IA crea el reporte: apenas se genere en un idioma, ese es el que se almacena y no se sobreescribe. Luego, agregar tests que confirmen este desarrollo.
+
+### Decisiones consultadas
+C12, C13 y C14 (ver la sección "Decisiones consultadas y tomadas por mí"). La segunda consulta se repitió porque la respuesta mezclaba "memoria del servidor" con "localStorage", que es del navegador.
+
+### Diseño
+
+`apps/client/src/reportCache.js`: módulo aislado, sin React, testeable con un storage simulado.
+- **Clave:** `oliver:report:v1:<sesión>:<idioma>:<audiencia>`. El prefijo `v1` permite invalidar todo el caché si cambia la forma de la respuesta.
+- **`saveReportIfAbsent(data)`:** solo guarda si `meta.validation.passed === true` y si no existe ya una entrada (**nunca sobreescribe**). La clave sale de la propia respuesta (`session.id`, `language`, `audience`), no del estado de la UI.
+- **`readCachedReport(...)`:** valida la forma de lo leído (que la sesión, el idioma y la audiencia coincidan con la clave, y que el reporte esté completo y validado). Una entrada corrupta o editada se descarta y se elimina, para que pueda guardarse una válida.
+- **Fallos de `localStorage`** (modo privado, cuota llena, acceso bloqueado): se tratan como "sin caché". La app nunca falla por esto.
+
+`ReportPanel`:
+- Al montar y al cambiar idioma o audiencia, si la combinación está guardada se **muestra al instante sin llamar a la API**, con el aviso "Saved report, generated on …".
+- Con una combinación guardada, el botón pasa a **"Report saved"** y queda **deshabilitado**. `handleGenerate` además corta si hay caché (doble defensa contra la sobreescritura).
+- El toast indica si el reporte se guardó o no.
+
+### Decisiones de implementación
+
+| # | Decisión | Justificación | Alternativas descartadas |
+| --- | --- | --- | --- |
+| 1 | Lógica del caché en un módulo propio con el storage inyectable | Testeable sin React ni navegador; el componente solo orquesta. | Lógica dentro del componente. |
+| 2 | Validar la forma de lo leído de `localStorage` | Es almacenamiento editable por el usuario y puede corromperse; no se muestra nada que no tenga la forma correcta. | Confiar en lo guardado. |
+| 3 | Botón deshabilitado + corte en `handleGenerate` | La regla "no se sobreescribe" no depende solo de la UI. | Solo deshabilitar el botón. |
+| 4 | `localStorage.clear()` en el `afterEach` del setup de tests | El caché persistía entre tests y podía hacer pasar o fallar tests por efecto de otro. | — |
+
+### Tests añadidos (16)
+- **`reportCache.test.js` (9):**
+  - Formato de la clave.
+  - Solo se cachea lo validado.
+  - Guardar y leer.
+  - **Nunca sobreescribe**.
+  - Combinaciones independientes (sesión, idioma y audiencia).
+  - No guarda reportes con respaldo.
+  - Entradas corruptas o que no coinciden con su clave.
+  - `localStorage` lleno o bloqueado.
+  - Uso del `localStorage` real.
+- **`ReportPanel.test.jsx` (7):**
+  - Se guarda y el botón queda en "Report saved" sin nuevas llamadas.
+  - Al reabrir se muestra al instante con **0 llamadas a la API**.
+  - es/en y coach/player se generan una vez cada uno y al volver se sirven desde el caché.
+  - No se sobreescribe aunque el servidor devolviera otro.
+  - Un reporte con respaldo no se guarda y se puede regenerar hasta obtener uno validado.
+  - Los errores no se cachean.
+  - Con `localStorage` lleno el reporte se muestra igual.
+
+### Verificación
+- `npm run test:client`: **68/68** (antes 52).
+- **Prueba de punta a punta** con PostgreSQL y Gemini reales en Edge headless (controlado por DevTools Protocol):
+  - Generar → se guarda `oliver:report:v1:103:en:coach` y el botón pasa a "Report saved".
+  - Recargar la página → el mismo reporte aparece con el aviso de guardado y **0 peticiones POST** a `/report`.
+  - Cambiar a Español → "Generate report", porque esa combinación no tiene caché.
+  - Sin errores en la consola.

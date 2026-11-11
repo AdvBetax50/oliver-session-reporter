@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { CircleCheck, Info, Loader2, Sparkles, Star } from 'lucide-react';
+import { BookmarkCheck, CircleCheck, Info, Loader2, Sparkles, Star } from 'lucide-react';
 import { toast } from 'sonner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -11,6 +11,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils';
 import { generateReport } from '../api.js';
 import { formatValue, METRICS_BY_KEY, withUnit } from '../metrics.js';
+import { readCachedReport, saveReportIfAbsent } from '../reportCache.js';
 import { EmptyState, ErrorState, LevelBadge } from './states.jsx';
 
 const LANGUAGE_OPTIONS = [{ value: 'en', label: 'English' }, { value: 'es', label: 'Español' }];
@@ -59,16 +60,38 @@ function DataBasedTag() {
 /**
  * Generación del reporte con IA. Estados: idle (vacío) -> loading -> success | error.
  * Se monta con key={sessionId}: al cambiar de sesión se reinicia y se cancela la petición en curso.
+ * Caché (reportCache.js): el primer reporte validado de cada sesión + idioma + audiencia se guarda en
+ * localStorage, se muestra sin volver a llamar a la IA y nunca se sobreescribe.
  */
+const IDLE = { status: 'idle', data: null, error: null, fromCache: false };
+const fromCacheState = (data) => ({ status: 'success', data, error: null, fromCache: true });
+
 export default function ReportPanel({ sessionId }) {
   const [language, setLanguage] = useState('en');
   const [audience, setAudience] = useState('coach');
-  const [state, setState] = useState({ status: 'idle', data: null, error: null });
+  // Si la combinación por defecto ya está guardada en este navegador, se muestra sin pedirla.
+  const [state, setState] = useState(() => {
+    const cached = readCachedReport(sessionId, 'en', 'coach');
+    return cached ? fromCacheState(cached) : IDLE;
+  });
   const controllerRef = useRef(null);
 
   useEffect(() => () => controllerRef.current?.abort(), []);
 
+  // Al cambiar idioma o audiencia: si esa combinación ya tiene un reporte guardado, se muestra al instante.
+  useEffect(() => {
+    const cached = readCachedReport(sessionId, language, audience);
+    if (cached) setState(fromCacheState(cached));
+  }, [sessionId, language, audience]);
+
+  // Reporte guardado para la combinación elegida (no se vuelve a pedir ni se sobreescribe)
+  const saved = readCachedReport(sessionId, language, audience);
+
   async function handleGenerate() {
+    if (saved) {
+      setState(fromCacheState(saved)); // defensa: nunca se regenera una combinación guardada
+      return;
+    }
     controllerRef.current?.abort();
     const controller = new AbortController();
     controllerRef.current = controller;
@@ -76,9 +99,12 @@ export default function ReportPanel({ sessionId }) {
     try {
       const data = await generateReport(sessionId, { language, audience }, { signal: controller.signal });
       if (controller.signal.aborted) return; // llegó una respuesta de una petición ya reemplazada o desmontada
-      setState({ status: 'success', data, error: null });
+      const cacheResult = saveReportIfAbsent(data);
+      setState({ status: 'success', data, error: null, fromCache: false });
       toast.success('Report generated', {
-        description: data.meta.validation?.passed ? 'All figures verified against the session data.' : 'Some parts were replaced by verified data.',
+        description: cacheResult === 'saved'
+          ? 'All figures verified. Saved in this browser: it will not be regenerated.'
+          : 'Some parts were replaced by verified data, so it was not saved. You can regenerate it.',
       });
     } catch (error) {
       if (error.name === 'AbortError' || controller.signal.aborted) return;
@@ -90,6 +116,7 @@ export default function ReportPanel({ sessionId }) {
   const loading = state.status === 'loading';
   const report = state.data;
   const outdated = report && (report.language !== language || report.audience !== audience);
+  const buttonLabel = loading ? 'Generating…' : saved ? 'Report saved' : report && !outdated ? 'Regenerate report' : 'Generate report';
 
   return (
     <Card className="gap-4 bg-card/90 py-4 backdrop-blur sm:gap-6 sm:py-6">
@@ -105,11 +132,12 @@ export default function ReportPanel({ sessionId }) {
           {/* Botón primario con el degradado azul de los botones de oliversports.ai */}
           <Button
             onClick={handleGenerate}
-            disabled={loading}
+            disabled={loading || Boolean(saved)}
+            title={saved ? 'This report is saved in your browser and is not regenerated' : undefined}
             className="w-full rounded-pill bg-linear-to-r from-brand-deep to-primary px-5 sm:w-auto font-semibold shadow-md shadow-black/30 hover:from-primary hover:to-brand-deep"
           >
-            {loading ? <Loader2 className="animate-spin" aria-hidden="true" /> : <Sparkles aria-hidden="true" />}
-            {loading ? 'Generating…' : report ? 'Regenerate report' : 'Generate report'}
+            {loading ? <Loader2 className="animate-spin" aria-hidden="true" /> : saved ? <BookmarkCheck aria-hidden="true" /> : <Sparkles aria-hidden="true" />}
+            {buttonLabel}
           </Button>
         </CardAction>
       </CardHeader>
@@ -136,7 +164,16 @@ export default function ReportPanel({ sessionId }) {
             {outdated && !loading && (
               <Alert role="status" className="mb-4 bg-secondary">
                 <Info aria-hidden="true" />
-                <AlertDescription>Language or audience changed. Click “Regenerate report” to apply them.</AlertDescription>
+                <AlertDescription>Language or audience changed. Click “Generate report” to create the report for them.</AlertDescription>
+              </Alert>
+            )}
+            {state.fromCache && !outdated && (
+              <Alert role="status" className="mb-4 border-success/40 bg-success/10">
+                <BookmarkCheck className="text-success" aria-hidden="true" />
+                <AlertDescription className="text-soft">
+                  Saved report, generated on {new Date(report.meta.generatedAt).toLocaleString('en-US')}. Loaded from this browser
+                  without calling the AI again.
+                </AlertDescription>
               </Alert>
             )}
             <ReportContent data={report} />
