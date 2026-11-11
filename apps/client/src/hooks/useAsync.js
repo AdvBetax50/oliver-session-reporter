@@ -16,10 +16,14 @@ export function useAsync(asyncFn, deps, { enabled = true } = {}) {
     if (!enabled) return undefined;
     const controller = new AbortController();
     setState((s) => ({ ...s, status: 'loading', error: null }));
+    // Si la petición ya fue cancelada (cambió la sesión, se desmontó…), su resultado se descarta
+    // aunque llegue después: abortar no detiene un .then que ya estaba en cola.
     asyncFn(controller.signal)
-      .then((data) => setState({ status: 'success', data, error: null }))
+      .then((data) => {
+        if (!controller.signal.aborted) setState({ status: 'success', data, error: null });
+      })
       .catch((error) => {
-        if (error.name !== 'AbortError') setState((s) => ({ ...s, status: 'error', error }));
+        if (!controller.signal.aborted && error.name !== 'AbortError') setState((s) => ({ ...s, status: 'error', error }));
       });
     return () => controller.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps

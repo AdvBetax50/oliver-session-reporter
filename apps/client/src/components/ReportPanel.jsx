@@ -75,12 +75,13 @@ export default function ReportPanel({ sessionId }) {
     setState((s) => ({ ...s, status: 'loading', error: null }));
     try {
       const data = await generateReport(sessionId, { language, audience }, { signal: controller.signal });
+      if (controller.signal.aborted) return; // llegó una respuesta de una petición ya reemplazada o desmontada
       setState({ status: 'success', data, error: null });
       toast.success('Report generated', {
         description: data.meta.validation?.passed ? 'All figures verified against the session data.' : 'Some parts were replaced by verified data.',
       });
     } catch (error) {
-      if (error.name === 'AbortError') return;
+      if (error.name === 'AbortError' || controller.signal.aborted) return;
       setState((s) => ({ ...s, status: 'error', error }));
       toast.error('The report could not be generated', { description: error.message });
     }
@@ -133,7 +134,7 @@ export default function ReportPanel({ sessionId }) {
         {report && (
           <div className={cn(loading && 'pointer-events-none opacity-50')}>
             {outdated && !loading && (
-              <Alert className="mb-4 bg-secondary">
+              <Alert role="status" className="mb-4 bg-secondary">
                 <Info aria-hidden="true" />
                 <AlertDescription>Language or audience changed. Click “Regenerate report” to apply them.</AlertDescription>
               </Alert>
@@ -177,7 +178,7 @@ function ReportContent({ data }) {
   return (
     <article className="space-y-5 sm:space-y-6">
       {usedFallback && (
-        <Alert className="border-primary/40 bg-primary/10">
+        <Alert role="status" className="border-primary/40 bg-primary/10">
           <Info className="text-primary" aria-hidden="true" />
           <AlertDescription className="text-soft">
             Some parts of the AI answer were incomplete or mentioned data that is not in this session, so they were replaced by text
@@ -234,7 +235,7 @@ function ReportContent({ data }) {
       <section>
         <SectionTitle>Workload alerts</SectionTitle>
         {report.alerts.length === 0 ? (
-          <Alert className="border-success/40 bg-success/10">
+          <Alert role="status" className="border-success/40 bg-success/10">
             <CircleCheck className="text-success" aria-hidden="true" />
             <AlertDescription className="text-success">No player reached the defined thresholds in this session.</AlertDescription>
           </Alert>
