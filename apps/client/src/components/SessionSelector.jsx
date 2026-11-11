@@ -1,31 +1,41 @@
+import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatDate } from '../metrics.js';
 
 const TYPE_LABELS = { training: 'Training', match: 'Match' };
 
 export default function SessionSelector({ sessions, value, onChange, disabled }) {
   return (
-    <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
-      <label htmlFor="session" className="text-sm font-medium text-slate-600">
-        Session
-      </label>
-      <select
-        id="session"
-        value={value ?? ''}
-        disabled={disabled}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 focus:outline-none sm:w-96"
-      >
-        {sessions.map((s) => (
-          <option key={s.id} value={s.id}>
-            {formatDate(s.date)} · {TYPE_LABELS[s.type] ?? s.type} · {s.title}
-          </option>
-        ))}
-      </select>
+    <div className="flex w-full flex-col gap-1.5 lg:w-auto lg:flex-row lg:items-center lg:gap-3">
+      <Label htmlFor="session" className="text-soft">Session</Label>
+      {/* Siempre controlado: "" (sin selección) muestra el placeholder hasta que llega la sesión por defecto */}
+      <Select value={value === null ? '' : String(value)} onValueChange={(v) => onChange(Number(v))} disabled={disabled}>
+        <SelectTrigger
+          id="session"
+          // Escritorio (lg): el ancho se ajusta al contenido (fecha + título + tipo) sin recortar.
+          // Móvil/tablet: ancho completo; si no entra, el texto pasa a otra línea y el trigger crece
+          // (data-[size=default]:h-auto anula la altura fija h-9 del trigger de shadcn).
+          className="min-h-9 w-full whitespace-normal rounded-2xl bg-secondary py-1.5 text-left data-[size=default]:h-auto *:data-[slot=select-value]:line-clamp-none lg:w-auto lg:min-w-[24rem] lg:whitespace-nowrap lg:rounded-pill"
+        >
+          <SelectValue placeholder="Select a session" />
+        </SelectTrigger>
+        <SelectContent position="popper" align="end" className="max-w-[calc(100vw-2rem)]">
+          {sessions.map((s) => (
+            <SelectItem key={s.id} value={String(s.id)} className="whitespace-normal">
+              <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                <span className="text-muted-foreground">{formatDate(s.date)}</span>
+                <span>{s.title}</span>
+                <SessionTypeBadge type={s.type} />
+              </span>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   );
 }
 
 export function SessionTypeBadge({ type }) {
-  const styles = type === 'match' ? 'bg-indigo-100 text-indigo-800' : 'bg-emerald-100 text-emerald-800';
-  return <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${styles}`}>{TYPE_LABELS[type] ?? type}</span>;
+  return <Badge variant={type === 'match' ? 'pink' : 'brand'}>{TYPE_LABELS[type] ?? type}</Badge>;
 }

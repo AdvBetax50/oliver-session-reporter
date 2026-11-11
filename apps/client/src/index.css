@@ -1,9 +1,98 @@
+@import url("https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
+@import "tw-animate-css";
 
-@theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+/*
+  Tema de shadcn/ui con la paleta de oliversports.ai (variables :root de su main.css):
+    --dark-blue #001c26 · degradado a #003c51 · --blue #2378f8 · #184b96 (botones)
+    --pink #e04080 · amarillo CTA #f9b82c / #ffc94d · texto sobre oscuro #d9e5fa · tipografía Rubik
+  Los componentes de shadcn usan las variables estándar (--background, --primary, --muted-foreground…);
+  aquí solo se les asignan los colores de la marca. La app es solo tema oscuro.
+  Excepción consultada (C10): "critical" usa rojo estándar porque la marca no tiene rojo.
+*/
+:root {
+  color-scheme: dark; /* selects, scrollbars y controles nativos en oscuro */
+  --radius: 0.875rem;
+
+  --background: #001c26;
+  --foreground: #ffffff;
+  --card: #062836;
+  --card-foreground: #ffffff;
+  --popover: #04222e;
+  --popover-foreground: #ffffff;
+  --primary: #2378f8;
+  --primary-foreground: #ffffff;
+  --secondary: #0c3445;
+  --secondary-foreground: #ffffff;
+  --muted: #0c3445;
+  --muted-foreground: #8fa9b6;
+  --accent: #10405a; /* fondo de hover/selección en menús (convención shadcn) */
+  --accent-foreground: #ffffff;
+  --destructive: #ef4444;
+  --border: #1a4a5d;
+  --input: #1a4a5d;
+  --ring: #2378f8;
+
+  /* Series de gráficos */
+  --chart-1: #2378f8; /* normal */
+  --chart-2: #f9b82c; /* warning */
+  --chart-3: #ef4444; /* critical */
+  --chart-4: #e04080; /* rosa de marca */
+  --chart-5: #25d366;
 }
 
-body {
-  @apply bg-slate-50 text-slate-800 antialiased;
+@theme inline {
+  --font-sans: "Rubik", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-pill: 30px; /* --border-radius del sitio */
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  /* Tokens propios de la marca y de los estados del dominio */
+  --color-deep: #003c51; /* final del degradado de fondo */
+  --color-soft: #d9e5fa; /* texto secundario sobre oscuro */
+  --color-brand-deep: #184b96; /* inicio del degradado de los botones */
+  --color-pink: #e04080;
+  --color-warning: #f9b82c;
+  --color-warning-fg: #ffc94d;
+  --color-critical: #ef4444;
+  --color-critical-fg: #ff8a8a;
+  --color-success: #25d366;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply min-h-screen bg-background font-sans text-foreground antialiased;
+    background-image: linear-gradient(180deg, var(--background) 0%, #003c51 100%);
+    background-attachment: fixed;
+  }
 }

@@ -1,20 +1,31 @@
 import { useState } from 'react';
-import { Bar, BarChart, CartesianGrid, Cell, LabelList, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Bar, BarChart, CartesianGrid, Cell, LabelList, ReferenceLine, XAxis, YAxis } from 'recharts';
+import { BarChart3 } from 'lucide-react';
+import { ChartContainer, ChartTooltip } from '@/components/ui/chart';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatValue, indexBreaches, METRICS, METRICS_BY_KEY, withUnit } from '../metrics.js';
-import { EmptyState } from './ui.jsx';
+import { useMediaQuery } from '../hooks/useMediaQuery.js';
+import { EmptyState } from './states.jsx';
 
-const COLORS = { normal: '#6366f1', warning: '#f59e0b', critical: '#ef4444' };
+// 'Santiago Molina' -> 'S. Molina' (pantallas angostas)
+const shortName = (name) => { const [first, ...rest] = name.split(' '); return rest.length ? `${first[0]}. ${rest.join(' ')}` : name; };
 
-function ChartTooltip({ active, payload, metric }) {
+// Colores por nivel = variables del tema (index.css): sin hex duplicados en el componente.
+const LEVEL_FILL = { normal: 'var(--chart-1)', warning: 'var(--chart-2)', critical: 'var(--chart-3)' };
+
+function LevelTooltip({ active, payload, metric }) {
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
   return (
-    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-lg">
-      <p className="font-medium text-slate-900">#{d.shirtNumber} {d.name}</p>
-      <p className="text-slate-600">{metric.label}: <span className="font-semibold">{withUnit(d.value, metric)}</span></p>
+    <div className="grid min-w-40 gap-1 rounded-lg border border-border/50 bg-popover px-3 py-2 text-xs shadow-xl">
+      <p className="font-medium text-foreground">#{d.shirtNumber} {d.name}</p>
+      <p className="text-muted-foreground">
+        {metric.label}: <span className="font-mono font-semibold text-foreground tabular-nums">{withUnit(d.value, metric)}</span>
+      </p>
       {d.level !== 'normal' && (
-        <p className={d.level === 'critical' ? 'text-red-600' : 'text-amber-600'}>
-          {d.level === 'critical' ? '▲▲ Critical' : '▲ Warning'} threshold reached
+        <p className={d.level === 'critical' ? 'text-critical-fg' : 'text-warning-fg'}>
+          {d.level === 'critical' ? 'Critical' : 'Warning'} threshold reached
         </p>
       )}
     </div>
@@ -22,11 +33,12 @@ function ChartTooltip({ active, payload, metric }) {
 }
 
 /**
- * Barras horizontales por jugador para la métrica elegida, ordenadas de mayor a menor.
- * Colorea según las alertas del servidor y dibuja las líneas de umbral si la métrica tiene.
+ * Chart de shadcn/ui (Recharts dentro de ChartContainer): barras horizontales por jugador para la
+ * métrica elegida, de mayor a menor, coloreadas según las alertas y con las líneas de umbral.
  */
 export default function MetricChart({ metrics, alerts, thresholds }) {
   const [metricKey, setMetricKey] = useState('total_distance_m');
+  const compact = useMediaQuery('(max-width: 639px)'); // móvil: eje más angosto y nombres abreviados
   const metric = METRICS_BY_KEY[metricKey];
   const threshold = thresholds?.[metricKey];
   const breaches = indexBreaches(alerts);
@@ -41,54 +53,60 @@ export default function MetricChart({ metrics, alerts, thresholds }) {
     }))
     .sort((a, b) => b.value - a.value);
   const missing = metrics.length - data.length;
+  const chartConfig = { value: { label: metric.label, color: 'var(--chart-1)' } };
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <label htmlFor="chart-metric" className="text-sm font-medium text-slate-600">Metric</label>
-        <select
-          id="chart-metric"
-          value={metricKey}
-          onChange={(e) => setMetricKey(e.target.value)}
-          className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 focus:outline-none"
-        >
-          {METRICS.map((m) => (
-            <option key={m.key} value={m.key}>
-              {m.label}{m.unit ? ` (${m.unit})` : ''}{thresholds?.[m.key] ? ' •' : ''}
-            </option>
-          ))}
-        </select>
+      <div className="mb-4 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
+        <Label htmlFor="chart-metric" className="text-soft">Metric</Label>
+        <Select value={metricKey} onValueChange={setMetricKey}>
+          <SelectTrigger id="chart-metric" className="w-full rounded-pill bg-secondary sm:w-64">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {METRICS.map((m) => (
+              <SelectItem key={m.key} value={m.key}>
+                {m.label}{m.unit ? ` (${m.unit})` : ''}
+                {thresholds?.[m.key] && <span className="text-warning" aria-label="has threshold">•</span>}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {data.length === 0 ? (
-        <EmptyState title="No data for this metric" description="None of the players reported a value for this metric in this session." />
+        <EmptyState icon={BarChart3} title="No data for this metric" description="None of the players reported a value for this metric in this session." />
       ) : (
-        <div style={{ height: Math.max(220, data.length * 30 + 40) }} role="img" aria-label={`${metric.label} by player, highest first`}>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data} layout="vertical" margin={{ top: 16, right: 48, bottom: 0, left: 8 }}>
-              <CartesianGrid horizontal={false} stroke="#e2e8f0" />
-              <XAxis type="number" tick={{ fontSize: 12, fill: '#64748b' }} tickFormatter={(v) => formatValue(v, metric)} />
-              <YAxis type="category" dataKey="name" width={124} tick={{ fontSize: 12, fill: '#334155' }} interval={0} />
-              <Tooltip content={<ChartTooltip metric={metric} />} cursor={{ fill: '#f1f5f9' }} />
-              <Bar dataKey="value" radius={[0, 4, 4, 0]} maxBarSize={22} isAnimationActive={false}>
-                {data.map((d) => <Cell key={d.name} fill={COLORS[d.level]} />)}
-                <LabelList dataKey="value" position="right" formatter={(v) => formatValue(v, metric)} style={{ fontSize: 11, fill: '#475569' }} />
-              </Bar>
-              {threshold && (
-                <ReferenceLine x={threshold.warning} stroke={COLORS.warning} strokeDasharray="4 4" ifOverflow="extendDomain"
-                  label={{ value: `Warning ${formatValue(threshold.warning, metric)}`, position: 'top', fontSize: 11, fill: '#b45309' }} />
-              )}
-              {threshold?.critical != null && (
-                <ReferenceLine x={threshold.critical} stroke={COLORS.critical} strokeDasharray="4 4" ifOverflow="extendDomain"
-                  label={{ value: `Critical ${formatValue(threshold.critical, metric)}`, position: 'top', fontSize: 11, fill: '#b91c1c' }} />
-              )}
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+        <ChartContainer
+          config={chartConfig}
+          className="aspect-auto w-full"
+          style={{ height: Math.max(220, data.length * (compact ? 28 : 30) + 40) }}
+          role="img"
+          aria-label={`${metric.label} by player, highest first`}
+        >
+          <BarChart data={data} layout="vertical" margin={{ top: 16, right: compact ? 36 : 48, bottom: 0, left: compact ? 0 : 8 }} accessibilityLayer>
+            <CartesianGrid horizontal={false} />
+            <XAxis type="number" tickLine={false} axisLine={false} tickCount={compact ? 3 : 5} tickFormatter={(v) => formatValue(v, metric)} />
+            <YAxis type="category" dataKey="name" width={compact ? 84 : 124} tickFormatter={compact ? shortName : undefined} tickLine={false} axisLine={false} interval={0} tick={{ fill: 'var(--color-soft, #d9e5fa)', fontSize: 12 }} />
+            <ChartTooltip cursor={{ fill: 'var(--accent)', opacity: 0.4 }} content={<LevelTooltip metric={metric} />} />
+            <Bar dataKey="value" radius={[0, 6, 6, 0]} maxBarSize={22} isAnimationActive={false}>
+              {data.map((d) => <Cell key={d.name} fill={LEVEL_FILL[d.level]} />)}
+              <LabelList dataKey="value" position="right" formatter={(v) => formatValue(v, metric)} className="fill-foreground" fontSize={11} />
+            </Bar>
+            {threshold && (
+              <ReferenceLine x={threshold.warning} stroke="var(--chart-2)" strokeDasharray="4 4" ifOverflow="extendDomain"
+                label={{ value: `Warning ${formatValue(threshold.warning, metric)}`, position: 'top', fontSize: 11, fill: 'var(--chart-2)' }} />
+            )}
+            {threshold?.critical != null && (
+              <ReferenceLine x={threshold.critical} stroke="var(--chart-3)" strokeDasharray="4 4" ifOverflow="extendDomain"
+                label={{ value: `Critical ${formatValue(threshold.critical, metric)}`, position: 'top', fontSize: 11, fill: 'var(--chart-3)' }} />
+            )}
+          </BarChart>
+        </ChartContainer>
       )}
 
       {missing > 0 && data.length > 0 && (
-        <p className="mt-2 text-xs text-slate-500">
+        <p className="mt-2 text-xs text-muted-foreground">
           {missing} player{missing > 1 ? 's' : ''} not shown: value not reported.
         </p>
       )}
