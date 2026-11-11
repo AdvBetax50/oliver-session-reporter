@@ -15,7 +15,11 @@
     "db:migrate": "npm run db:migrate -w apps/server",
     "db:seed": "npm run db:seed -w apps/server",
     "db:setup": "npm run db:create && npm run db:migrate && npm run db:seed",
-    "test": "npm test -w apps/server"
+    "test": "npm test -w apps/server && npm test -w apps/client",
+    "test:server": "npm test -w apps/server",
+    "test:client": "npm test -w apps/client",
+    "test:db": "npm run test:db -w apps/server",
+    "test:all": "npm test && npm run test:db"
   },
   "engines": {
     "node": ">=20.19"

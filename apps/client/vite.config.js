@@ -12,6 +12,13 @@ export default defineConfig({
     // Alias "@/..." -> src/ (convención de shadcn/ui; también en jsconfig.json para el editor)
     alias: { '@': path.resolve(dirname, './src') },
   },
+  // Tests de componentes (Vitest + Testing Library) en un DOM simulado
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.js'],
+    css: false,
+    restoreMocks: true,
+  },
   server: {
     port: 5173,
     // Redirige /api/* al backend (quitando el prefijo) para evitar CORS y URLs absolutas.
