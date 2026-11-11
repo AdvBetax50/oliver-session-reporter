@@ -46,7 +46,8 @@ Abrir **http://localhost:5173**.
 | Backend | `npm run dev:server` | Express en el puerto 3001 (`node --watch`) |
 | Frontend | `npm run dev:client` | Vite en el puerto 5173; `/api/*` se redirige a la API |
 | Seed de datos | `npm run db:seed` | Carga `apps/server/db/seeds/data.json`. Es idempotente: se puede repetir sin duplicar. |
-| Tests | `npm test` | 40 tests del backend; no necesitan base de datos ni API key |
+| Tests | `npm test` | 116 tests (backend + frontend); no necesitan base de datos ni API key |
+| Tests de integración | `npm run test:db` | 10 tests contra PostgreSQL real, en una base temporal que se crea y se elimina sola |
 
 <details>
 <summary>Si el usuario de PostgreSQL no existe</summary>
@@ -90,7 +91,7 @@ ALTER SCHEMA public OWNER TO admin;   -- PostgreSQL 15+
 | **Prompt versionado en un archivo `.md`** (`apps/server/prompts/session-report.v1.md`), elegido con `REPORT_PROMPT_VERSION` y devuelto en `meta.promptVersion`. | Legible y revisable en un PR; cada reporte es trazable a su prompt. | Hace falta un pequeño cargador de plantillas. |
 | **PostgreSQL con SQL directo + DTOs + repositorios** (sin ORM); `workload_au` como **columna generada**. | Esquema explícito y validado (CHECKs, FKs); un solo punto de mapeo BD ↔ API; el dato derivado nunca queda inconsistente. | Más código de mapeo que con un ORM. |
 | **Orden de la tabla en el servidor** (`order_by` con lista blanca → columnas SQL, `NULLS LAST`). | Usa el endpoint pedido y evita la inyección SQL. | Una petición por cada cambio de orden (son 12 filas, así que es despreciable). |
-| **Inyección de dependencias** (`createApp(deps)`) y tests HTTP con repositorios en memoria y una IA simulada. | 40 tests rápidos sin base de datos ni red. | Los repositorios en memoria duplican la lógica de filtro y orden del SQL (el SQL se testea aparte). |
+| **Inyección de dependencias** (`createApp(deps)`) y tests HTTP con repositorios en memoria y una IA simulada. | Tests rápidos sin base de datos ni red; el SQL real se cubre aparte con tests de integración contra PostgreSQL. | Los repositorios en memoria duplican la lógica de filtro y orden del SQL (el SQL se testea aparte). |
 | **Frontend:** React + **shadcn/ui** (Radix + Tailwind v4) con la paleta de oliversports.ai; data table (TanStack) en escritorio y **tarjetas por jugador en móvil y tablet**; estados de carga, error y vacío explícitos. | Componentes accesibles (teclado, ARIA, tooltips reales) y consistentes con la marca; usable en un celular a pie de campo. | Más componentes en el repo (shadcn copia su código) y dos vistas para las métricas. |
 | **npm workspaces** (sin Turborepo / Nx), JavaScript con ES Modules (sin TypeScript). | Lo mínimo necesario para dos apps; arranque inmediato. | Sin tipado estático; los contratos se validan en tiempo de ejecución con DTOs. |
 
@@ -100,13 +101,11 @@ El detalle de cada decisión (con las alternativas descartadas) está en [`log.m
 
 ## 4. Qué mejoraría o haría distinto con más tiempo
 
-- **TypeScript** en backend y frontend, compartiendo los tipos y DTOs en un paquete `packages/shared`.
-- **Caché de reportes** por `(sesión, idioma, audiencia, versión de prompt)`: hoy cada clic llama a la IA.
 - **Streaming** de la respuesta del modelo para mostrar el reporte a medida que se genera y reducir la espera percibida.
 - **Evals del prompt:** un conjunto de casos (sesiones con datos raros) que mida automáticamente la tasa de validación al primer intento, para comparar `v1` contra `v2` y entre modelos.
 - **Validación semántica más fina:** hoy se verifica que cada número exista en los datos, pero no que esté **atribuido al jugador correcto**; el chequeo de nombres es heurístico.
-- **Tests de frontend** (Vitest + Testing Library) y **e2e** (Playwright); hoy la UI se verificó manualmente con el navegador en modo headless.
-- **Docker Compose** (PostgreSQL + API + cliente) para levantar todo con un comando.
+- **Tests e2e** (Playwright) del flujo completo en un navegador real y en CI; hoy hay tests de componentes (Vitest + Testing Library) y la UI se verificó además con un navegador headless.
+- **Docker Compose** (PostgreSQL + API + cliente) para levantar todo con un comando, incluyendo un volumen para la persistencia de datos en db.
 - **Autenticación y multi-equipo:** el modelo de datos ya separa por `team_id`, pero no hay usuarios.
 - **Code-splitting** del gráfico (Recharts hace que el bundle supere los 500 kB).
 - **Tendencias entre sesiones** (carga acumulada o aguda:crónica), que es lo que más valor daría al entrenador para la gestión de cargas.
@@ -134,12 +133,13 @@ Sí. El proyecto se desarrolló con **Claude Code** usando el modelo **Claude Op
   - No leer nunca el `.env`: el asistente solo ejecutaba los scripts y me informaba del resultado.
   - Usar DTOs para la base de datos.
   - Que el proveedor de IA fuera intercambiable.
-- **Verificación:** cada cambio se validó con tests automáticos (40), pruebas contra PostgreSQL y Gemini reales, y pruebas de la UI en un navegador headless (escritorio, tablet y móvil). Varios errores reales se detectaron así:
+- **Verificación:** cada cambio se validó con tests automáticos (126: backend, frontend e integración con PostgreSQL), pruebas contra PostgreSQL y Gemini reales, y pruebas de la UI en un navegador headless (escritorio, tablet y móvil). Varios errores reales se detectaron así:
   - Un bug del validador que aceptaba `11,000` como `11`.
   - Un promedio inventado en un test, que el propio validador rechazó.
   - Un `Select` que pasaba de no controlado a controlado.
   - Columnas cortadas en la tabla.
   - Un paquete npm poco fiable que añadió el CLI de shadcn, sustituido por el estándar.
+  - Un hook (`useAsync`) que podía mostrar la respuesta tardía de una sesión anterior, y avisos informativos marcados como `role="alert"` (los detectaron los tests de frontend).
 
 ---
 
@@ -154,6 +154,7 @@ oliver/
 │   │   ├── src/
 │   │   │   ├── components/      # SessionSelector, MetricsTable, MetricChart, ReportPanel, states
 │   │   │   ├── components/ui/   # componentes de shadcn/ui (Card, Select, Table, Tooltip, Chart...)
+│   │   │   ├── test/            # setup de Vitest y datos de prueba (los *.test.jsx viven junto a cada módulo)
 │   │   │   ├── hooks/           # useAsync (fetch con cancelación), useMediaQuery
 │   │   │   ├── lib/utils.js     # cn() de shadcn/ui
 │   │   │   ├── api.js           # cliente HTTP
@@ -174,7 +175,7 @@ oliver/
 │       ├── db/migrations/         # SQL numerado
 │       ├── db/seeds/data.json     # datos del challenge (no se modifica)
 │       ├── scripts/               # create-db, migrate, seed
-│       └── test/                  # node:test (40 tests)
+│       └── test/                  # node:test: unitarios (64) + integration/ con PostgreSQL real (10)
 ├── log.md                       # registro de decisiones
 └── package.json                 # npm workspaces
 ```
@@ -197,7 +198,9 @@ players N──M sessions  (vía player_sessions: métricas del jugador en la se
 | `npm run dev` | API + cliente en paralelo |
 | `npm run dev:server` / `dev:client` | Cada app por separado |
 | `npm run build` | Build de producción del cliente |
-| `npm test` | Tests del servidor (DTOs, capa de IA, reporte y API, sin base de datos) |
+| `npm test` | Tests unitarios del backend (node:test) y del frontend (Vitest + Testing Library) |
+| `npm run test:db` | Tests de integración contra PostgreSQL (base temporal `oliver_test_<pid>`; usa las credenciales del `.env`) |
+| `npm run test:all` | Todos los anteriores |
 | `npm run db:create` | Crea la base `oliver` si no existe |
 | `npm run db:migrate` | Aplica las migraciones pendientes |
 | `npm run db:seed` | Carga `apps/server/db/seeds/data.json` |

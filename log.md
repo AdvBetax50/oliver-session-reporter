@@ -784,3 +784,70 @@ C11 (ver la sección "Decisiones consultadas y tomadas por mí").
 ### Verificación
 - `npm run build` y `npm test` (40/40) correctos.
 - Navegador headless a **1440 px, 820 px y 390 px**: sin scroll horizontal en la página; 12 tarjetas en móvil; orden por Workload desde el Select móvil en ambos sentidos (Molina primero en desc, Medina en asc, Suárez con `null` al final); Select de sesión sin recorte; la leyenda abre con 14 conceptos y 4 filas de umbrales y se cierra con Escape. **Sin errores ni warnings en la consola.**
+
+---
+
+## Prompt 22 — Cobertura de tests de todas las funcionalidades
+
+**Fecha:** 2026-11-10
+
+**Instrucción:**
+> Agregar tests para todas las funcionalidades que no tengan. Si una feature ya tiene test, confirmar que se testea completamente y que el test es adecuado.
+
+### Auditoría de los tests existentes
+
+| Área | Estado previo | Veredicto |
+| --- | --- | --- |
+| Capa de IA (factoría, Gemini, schema, errores, reintentos) | 8 tests | ✅ Adecuado: cubre request, normalización, cada código de error y política de reintento. |
+| Reporte (contexto, validador, respaldo, schema, prompt) | 7 tests | ✅ Adecuado; se **completó** con promedios sin jugadores de pocos minutos, rankings, excesos y versión de prompt inexistente. |
+| Endpoints HTTP (`/sessions`, `/metrics`, `/report`) | 18 tests | ⚠ **Insuficiente en un punto**: usaban repositorios en memoria, así que el orden, el filtro, `NULLS LAST` y el SQL **nunca se habían ejecutado contra PostgreSQL**. Se mantienen (rápidos, sin BD) y se complementan con integración real. |
+| DTOs del seed | 6 tests | ✅ Adecuado; faltaban los DTOs de request y `fromRow` de Team, Player y Session → añadidos. |
+| SQL, migraciones, seed, restricciones, `/health` | **sin tests** | ❌ Añadidos (integración + unitarios con cliente simulado). |
+| Manejo de errores de Express (500, JSON mal formado, límite de body, CORS) | **sin tests** | ❌ Añadidos. |
+| Frontend completo | **sin tests** | ❌ Añadidos (Vitest + Testing Library). |
+
+### Tests añadidos
+
+**Backend — unitarios** (`npm test`, 39 → **64**):
+- `alerts.test.js`: borde `>=` del umbral, `null` nunca alerta, `critical` ausente, agrupación por jugador, orden críticos primero.
+- `request-dtos.test.js`: `parsePositiveInt` (`'1.5'`, `' 7'`, `'1e3'`, desbordes…), `MetricsQueryDTO` (defaults, orden por defecto según el tipo de columna, lista blanca completa, parámetro repetido), `ReportRequestDTO` (defaults, prioridad body > query), `fromRow`/`toParams`/inmutabilidad.
+- `app.test.js`: un error inesperado → **500 sin filtrar detalles** (IP, usuario, contraseña) pero registrado en el log; errores `expose`; JSON mal formado → 400; body > 10 kB → 413; CORS.
+- `setup.test.js`: migraciones (solo las pendientes, en orden, `ROLLBACK` si fallan) y seed (una transacción, orden por FKs, `ROLLBACK` ante error, JSON inválido rechazado **sin ejecutar ninguna query**).
+
+**Backend — integración con PostgreSQL real** (`npm run test:db`, **10**): crea una base aislada `oliver_test_<pid>`, aplica migraciones y seed, y la **elimina al terminar** (verificado: solo queda `oliver`).
+- Migraciones idempotentes; seed completo e idempotente (sin duplicados).
+- Columna generada `workload_au` idéntica al JSON en las 36 filas y no actualizable.
+- Restricciones `CHECK`, `UNIQUE` y `FK` (por código SQLSTATE).
+- **Rollback real** del seed ante una violación a mitad de carga.
+- Repositorios: orden por fecha, fechas sin desplazamiento de zona horaria, orden real en SQL, `NULLS LAST` en ambos sentidos, desempate por dorsal, filtro por jugador, tipos (`NUMERIC` → `number`).
+- API completa sobre la base real y `/health`.
+
+**Frontend** (`npm run test:client`, **52**):
+- `metrics.test.js`, `api.test.js`: formato de valores, fechas en UTC, mapeo de errores HTTP a mensajes, `Retry-After`, servidor caído, `AbortError`.
+- `useAsync.test.jsx`, `useMediaQuery.test.jsx`: estados, cancelación al cambiar dependencias y al desmontar, `reload`, datos previos durante la recarga.
+- `MetricsTable`, `MetricChart`, `SessionSelector`, `ReportPanel`, `GlossaryDialog`: render, resaltado accesible de umbrales, orden (encabezados, Select móvil y botón asc/desc), `aria-sort`, valores no reportados, estados vacío/carga/error/éxito del reporte, reintento, aviso de regenerar, cancelación al desmontar, leyenda con umbrales reales.
+- `App.test.jsx`: flujo completo con la API simulada (sesión por defecto, orden en el servidor, cambio de sesión, error con reintento, estado vacío).
+
+### Bugs reales encontrados por los tests nuevos
+
+| # | Bug | Corrección |
+| --- | --- | --- |
+| 1 | **`useAsync` podía mostrar la respuesta tardía de una sesión anterior.** Solo ignoraba `AbortError`; si la respuesta vieja ya se había resuelto cuando se canceló, su `.then` la pintaba igual. | Se descarta todo resultado cuya señal ya fue abortada. Se aplicó lo mismo al regenerar en `ReportPanel`. |
+| 2 | **Avisos informativos anunciados como alertas urgentes.** El `Alert` de shadcn usa siempre `role="alert"`, también para "algunas partes se reemplazaron…" o "no hay alertas". | Los avisos informativos usan `role="status"`; `role="alert"` queda solo para los errores. |
+| 3 | El test de la columna generada dependía del **idioma del servidor** (PostgreSQL en español). | Las aserciones de base de datos usan códigos SQLSTATE. |
+
+### Decisiones
+
+| # | Decisión | Justificación | Alternativas descartadas |
+| --- | --- | --- | --- |
+| 1 | Integración contra **PostgreSQL real en una base temporal** que el propio test crea y elimina, en un script separado (`npm run test:db`) | Es la única forma de probar SQL, restricciones y transacciones de verdad; aislada para no tocar los datos de `oliver`; separada para que `npm test` siga sin necesitar base de datos. | pg-mem (no soporta todo, por ejemplo columnas generadas); Testcontainers (requiere Docker, que no está instalado). |
+| 2 | Lógica de migraciones y seed extraída a `src/db/setup.js`, reutilizada por los scripts CLI y por los tests | Los scripts eran código de nivel superior imposible de testear; ahora se prueba exactamente el mismo código que se ejecuta. | Probar los scripts como procesos hijo. |
+| 3 | Frontend con **Vitest + Testing Library + jsdom**, consultando por **roles accesibles** (`table`, `combobox`, `option`, `dialog`, `alert`…) | Vitest comparte la configuración de Vite (alias `@/`); consultar por rol prueba lo que ve y usa el usuario y valida la accesibilidad al mismo tiempo. | Jest (requiere otra configuración de transformaciones); tests de snapshot (frágiles, no prueban comportamiento). |
+| 4 | Polyfills en el setup (`matchMedia`, `ResizeObserver`, pointer capture, `scrollIntoView`) | jsdom no los trae y Radix y Recharts los necesitan para abrir Select y Dialog. | — |
+| 5 | Lógica del gráfico extraída a la función pura `buildChartData` | En jsdom Recharts no tiene tamaño para dibujar el SVG; el orden, la exclusión de `null` y los niveles se prueban sin depender del render. | Probar sobre el SVG. |
+| 6 | Patrón de búsqueda de tests: `test/*.test.js` | Antes `node --test` también ejecutaba `helpers/in-memory-repos.js` y lo contaba como un test más. | — |
+| 7 | Scripts en la raíz: `test` (unitarios backend + frontend), `test:server`, `test:client`, `test:db`, `test:all` | Un comando para cada necesidad; el de por defecto no requiere infraestructura. | — |
+
+### Verificación
+- `npm run test:all`: **126/126** en verde (64 unitarios backend + 52 frontend + 10 integración con PostgreSQL).
+- `npm run build`: correcto (los tests no entran en el bundle).
