@@ -10,7 +10,7 @@ import { buildReportPrompt } from '../src/services/report/report-prompt.js';
 import { buildReportSchema } from '../src/services/report/report-schema.js';
 import { checkText, createGrounding, numberCandidates, validateModelOutput } from '../src/services/report/report-validator.js';
 import { fallbackAlertComment, fallbackHighlightCandidates, fallbackHighlightReason, fallbackSummary } from '../src/services/report/report-fallback.js';
-import { parsePromptFile, renderTemplate } from '../src/prompts/prompt-loader.js';
+import { loadPrompt, parsePromptFile, renderTemplate } from '../src/prompts/prompt-loader.js';
 
 const sessions = createSessionService(createInMemoryRepos());
 async function contextFor(sessionId) {
@@ -110,4 +110,36 @@ test('prompt versionado: archivo legible con todas las secciones y sin placehold
   assert.throws(() => renderTemplate('{{missing}}', {}), /missing/);
   // Los datos no se reinterpretan como placeholders (render en una sola pasada)
   assert.equal(renderTemplate('{{a}}', { a: '{{b}}' }), '{{b}}');
+});
+
+test('contexto: promedios sin los jugadores de pocos minutos, rankings y excesos precalculados', async () => {
+  const ctx = await contextFor(103);
+  const regulars = ctx.players.filter((p) => !p.low_minutes);
+  const expectedAvg = Math.round(regulars.reduce((a, p) => a + p.total_distance_m, 0) / regulars.length);
+  assert.equal(ctx.team_summary.avg_distance_m, expectedAvg);
+  assert.equal(ctx.team_summary.avg_distance_m, 6868);
+  assert.equal(ctx.team_summary.players_with_alerts, 5);
+  assert.equal(ctx.team_summary.players_with_critical_alerts, 2);
+
+  // Rankings: top 3 de mayor a menor, sin valores nulos
+  assert.deepEqual(ctx.rankings.sprints.map((r) => [r.rank, r.player_id, r.value]), [[1, 10, 29], [2, 1, 24], [3, 6, 22]]);
+  for (const list of Object.values(ctx.rankings)) {
+    assert.ok(list.length <= 3 && list.every((r, i) => i === 0 || list[i - 1].value >= r.value));
+  }
+
+  // Distancia por minuto y % frente al promedio (enteros/1 decimal: el validador los puede citar)
+  const molina = ctx.players.find((p) => p.player_id === 5);
+  assert.equal(molina.distance_per_min, 116.5);
+  assert.equal(molina.distance_vs_team_avg_pct, 53);
+
+  // Exceso sobre el umbral alcanzado (critical si lo hay)
+  const acosta = ctx.computed_alerts.find((a) => a.player_id === 10);
+  assert.deepEqual(acosta.breaches.find((b) => b.metric === 'sprints'), {
+    metric: 'sprints', value: 29, level: 'warning', threshold_reached: 28, warning: 28, critical: null, excess: 1, excess_pct: 4,
+  });
+});
+
+test('prompt: una versión inexistente falla con un mensaje claro', () => {
+  assert.throws(() => loadPrompt('session-report', 'v999'), /prompts\/session-report\.v999\.md.*REPORT_PROMPT_VERSION/);
+  assert.equal(loadPrompt('session-report', 'v1').id, 'session-report.v1');
 });
