@@ -1,14 +1,23 @@
 // Definición de las métricas que muestra la UI.
 // `key` es el nombre de la API (order_by, umbrales); `field` es la propiedad en la respuesta (camelCase).
+// `description` sigue la "Referencia de campos" del enunciado (sección 9) y alimenta la leyenda.
 export const METRICS = [
-  { key: 'minutes_played', field: 'minutesPlayed', label: 'Minutes played', short: 'Played', unit: 'min' },
-  { key: 'total_distance_m', field: 'totalDistanceM', label: 'Total distance', short: 'Distance', unit: 'm' },
-  { key: 'high_speed_running_m', field: 'highSpeedRunningM', label: 'High-speed running', short: 'HSR', unit: 'm' },
-  { key: 'sprints', field: 'sprints', label: 'Sprints', short: 'Sprints', unit: '' },
-  { key: 'max_speed_kmh', field: 'maxSpeedKmh', label: 'Max speed', short: 'Max speed', unit: 'km/h', decimals: 1 },
-  { key: 'accelerations', field: 'accelerations', label: 'Accelerations', short: 'Accel.', unit: '' },
-  { key: 'rpe', field: 'rpe', label: 'RPE (1–10)', short: 'RPE', unit: '' },
-  { key: 'workload_au', field: 'workloadAu', label: 'Workload', short: 'Workload', unit: 'AU' },
+  { key: 'minutes_played', field: 'minutesPlayed', label: 'Minutes played', short: 'Played', unit: 'min',
+    description: 'Minutes the player took part in the session.' },
+  { key: 'total_distance_m', field: 'totalDistanceM', label: 'Total distance', short: 'Distance', unit: 'm',
+    description: 'Total distance covered, in meters.' },
+  { key: 'high_speed_running_m', field: 'highSpeedRunningM', label: 'High-speed running', short: 'HSR', unit: 'm',
+    description: 'Meters covered at high speed.' },
+  { key: 'sprints', field: 'sprints', label: 'Sprints', short: 'Sprints', unit: '',
+    description: 'Number of sprints.' },
+  { key: 'max_speed_kmh', field: 'maxSpeedKmh', label: 'Max speed', short: 'Max speed', unit: 'km/h', decimals: 1,
+    description: 'Top speed reached, in km/h.' },
+  { key: 'accelerations', field: 'accelerations', label: 'Accelerations', short: 'Accel.', unit: '',
+    description: 'Number of intense accelerations.' },
+  { key: 'rpe', field: 'rpe', label: 'RPE (1–10)', short: 'RPE', unit: '',
+    description: 'Rating of Perceived Exertion: effort reported by the player on a 1–10 scale. It can be missing if the player did not report it.' },
+  { key: 'workload_au', field: 'workloadAu', label: 'Workload', short: 'Workload', unit: 'AU',
+    description: 'Training load = RPE × minutes played, in arbitrary units (AU). It is empty when the RPE is missing.' },
 ];
 
 export const METRICS_BY_KEY = Object.fromEntries(METRICS.map((m) => [m.key, m]));

@@ -10,6 +10,7 @@ import MetricChart from './components/MetricChart.jsx';
 import MetricsTable from './components/MetricsTable.jsx';
 import ReportPanel from './components/ReportPanel.jsx';
 import SessionSelector, { SessionTypeBadge } from './components/SessionSelector.jsx';
+import GlossaryDialog from './components/GlossaryDialog.jsx';
 import { EmptyState, ErrorState, LoadingState } from './components/states.jsx';
 
 const DEFAULT_SORT = { orderBy: 'shirt_number', order: 'asc' };
@@ -103,7 +104,7 @@ export default function App() {
                 )}
               </div>
 
-              <SectionCard title="Player metrics" description="Sortable by any metric (sorted on the server). Highlighted values reached a threshold.">
+              <SectionCard title="Player metrics" action={<GlossaryDialog thresholds={current?.thresholds} />} description="Sortable by any metric (sorted on the server). Highlighted values reached a threshold.">
                 {metrics.status === 'error' && (
                   <div className="mb-4"><ErrorState title="Metrics could not be loaded" error={metrics.error} onRetry={metrics.reload} /></div>
                 )}
