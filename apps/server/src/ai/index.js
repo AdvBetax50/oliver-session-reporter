@@ -10,7 +10,7 @@ const PROVIDERS = {
     new GeminiProvider({
       ...common,
       apiKey: env.GEMINI_API_KEY,
-      model: env.GEMINI_MODEL || 'gemini-2.5-flash',
+      model: env.GEMINI_MODEL || 'gemini-3.1-flash-lite',
       baseUrl: env.GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta',
     }),
   mock: (env, common) => new MockProvider({ ...common, model: env.MOCK_MODEL }),
@@ -31,10 +31,19 @@ export function createAiProvider(env = process.env) {
   // Parámetros comunes a cualquier proveedor
   const common = {
     temperature: numberOr(env.AI_TEMPERATURE, 0.4),
-    maxOutputTokens: numberOr(env.AI_MAX_OUTPUT_TOKENS, 1024),
+    // Holgado: en los modelos con "thinking" (Gemini 2.5) esos tokens cuentan dentro del máximo.
+    maxOutputTokens: numberOr(env.AI_MAX_OUTPUT_TOKENS, 4096),
     timeoutMs: numberOr(env.AI_TIMEOUT_MS, 30000),
   };
   return factory(env, common);
+}
+
+// Política de reintentos ante errores transitorios del proveedor (ver retry.js)
+export function readRetryConfig(env = process.env) {
+  return {
+    maxRetries: numberOr(env.AI_MAX_RETRIES, 1),
+    maxWaitMs: numberOr(env.AI_RETRY_MAX_WAIT_MS, 5000),
+  };
 }
 
 // Instancia perezosa: se crea en el primer uso, así el servidor arranca aunque falte la key.
@@ -46,3 +55,4 @@ export function getAiProvider() {
 
 export const SUPPORTED_AI_PROVIDERS = Object.keys(PROVIDERS);
 export { AiProvider, AiProviderError } from './ai-provider.js';
+export { generateWithRetry } from './retry.js';

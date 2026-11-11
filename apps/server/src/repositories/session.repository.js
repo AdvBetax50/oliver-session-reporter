@@ -12,6 +12,11 @@ export async function upsertSession(session, db = pool) {
   );
 }
 
+export async function findAllSessions(db = pool) {
+  const { rows } = await db.query(`SELECT ${COLUMNS} FROM sessions ORDER BY date DESC, id DESC`);
+  return rows.map(SessionDTO.fromRow);
+}
+
 export async function findSessionsByTeam(teamId, db = pool) {
   const { rows } = await db.query(
     `SELECT ${COLUMNS} FROM sessions WHERE team_id = $1 ORDER BY date DESC, id DESC`,

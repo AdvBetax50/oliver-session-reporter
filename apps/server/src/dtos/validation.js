@@ -4,7 +4,22 @@ export class ValidationError extends Error {
     super(message);
     this.name = 'ValidationError';
     this.status = 400;
+    this.expose = true;
   }
+}
+
+// Para parámetros de URL / query string, que siempre llegan como texto.
+export function parsePositiveInt(value, field) {
+  if (typeof value !== 'string' || !/^\d+$/.test(value) || Number(value) < 1 || !Number.isSafeInteger(Number(value))) {
+    throw new ValidationError(`${field} debe ser un entero positivo (recibido: ${JSON.stringify(value)})`);
+  }
+  return Number(value);
+}
+
+// Un parámetro de query repetido (?a=1&a=2) llega como array: se rechaza.
+export function singleValue(value, field) {
+  if (Array.isArray(value)) throw new ValidationError(`${field} solo admite un valor`);
+  return value;
 }
 
 export function requireInt(value, field, { min = -Infinity, max = Infinity } = {}) {
