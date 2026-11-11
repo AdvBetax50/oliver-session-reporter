@@ -9,7 +9,26 @@ import { useMediaQuery } from '../hooks/useMediaQuery.js';
 import { EmptyState } from './states.jsx';
 
 // 'Santiago Molina' -> 'S. Molina' (pantallas angostas)
-const shortName = (name) => { const [first, ...rest] = name.split(' '); return rest.length ? `${first[0]}. ${rest.join(' ')}` : name; };
+export const shortName = (name) => { const [first, ...rest] = name.split(' '); return rest.length ? `${first[0]}. ${rest.join(' ')}` : name; };
+
+/**
+ * Datos del gráfico (función pura, testeable sin renderizar SVG): jugadores con valor para la métrica,
+ * de mayor a menor, con su nivel de alerta. `missing` = jugadores sin dato (p. ej. RPE no reportado).
+ */
+export function buildChartData(metrics, alerts, metricKey) {
+  const metric = METRICS_BY_KEY[metricKey];
+  const breaches = indexBreaches(alerts);
+  const data = metrics
+    .filter((row) => row[metric.field] !== null)
+    .map((row) => ({
+      name: row.player.name,
+      shirtNumber: row.player.shirtNumber,
+      value: row[metric.field],
+      level: breaches.get(`${row.playerId}:${metricKey}`)?.level ?? 'normal',
+    }))
+    .sort((a, b) => b.value - a.value);
+  return { data, missing: metrics.length - data.length };
+}
 
 // Colores por nivel = variables del tema (index.css): sin hex duplicados en el componente.
 const LEVEL_FILL = { normal: 'var(--chart-1)', warning: 'var(--chart-2)', critical: 'var(--chart-3)' };
@@ -41,18 +60,7 @@ export default function MetricChart({ metrics, alerts, thresholds }) {
   const compact = useMediaQuery('(max-width: 639px)'); // móvil: eje más angosto y nombres abreviados
   const metric = METRICS_BY_KEY[metricKey];
   const threshold = thresholds?.[metricKey];
-  const breaches = indexBreaches(alerts);
-
-  const data = metrics
-    .filter((row) => row[metric.field] !== null)
-    .map((row) => ({
-      name: row.player.name,
-      shirtNumber: row.player.shirtNumber,
-      value: row[metric.field],
-      level: breaches.get(`${row.playerId}:${metricKey}`)?.level ?? 'normal',
-    }))
-    .sort((a, b) => b.value - a.value);
-  const missing = metrics.length - data.length;
+  const { data, missing } = buildChartData(metrics, alerts, metricKey);
   const chartConfig = { value: { label: metric.label, color: 'var(--chart-1)' } };
 
   return (
